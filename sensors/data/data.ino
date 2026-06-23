@@ -1,4 +1,20 @@
+#include <Arduino.h>
+#include <Arduino_MKRENV.h>
+#include <ArudinoJson.h>
+#include <pas-co2-ino.hpp>
+#include <SensirionI2cSps30.h>
 #include <WiFiS3.h>
+#include <Wire.h>
+
+/* 
+ * The sensor supports 100KHz and 400KHz. 
+ * You hardware setup and pull-ups value will
+ * also influence the i2c operation. You can 
+ * change this value to 100000 in case of 
+ * communication issues.
+ */
+// TODO: check to make sure this does not mess up the other sensors that use WIRE
+#define I2C_FREQ_HZ 400000
 
 const char ssid[] = "JTR";
 const char pass[] = "FlexibleDoor84";
@@ -6,6 +22,13 @@ const char pass[] = "FlexibleDoor84";
 int status = WL_IDLE_STATUS;
 
 WiFiClient client;
+
+PASCO2Ino cotwo;
+
+int16_t co2ppm;
+Error_t err;
+
+const int16_t SEN55_ADDRESS = 0x69;
 
 char server[] = "example.org";
 //IPAddress server(64,131,82,241);
@@ -15,14 +38,15 @@ const unsigned long postingInterval_ms = 10L * 1000L;
 int keyIndex = 0;
 
 NTPClient timeClient(ntpUDP);
+JsonDocument doc;
 
 void setup() {
   Serial.begin(115200);
+  // might be the wrong wire. work on this if the wires don't work https://docs.arduino.cc/language-reference/en/functions/communication/wire/#default-i2c-pins
+  Wire.begin();
 
   // WIFI SETUP
-  while (!Serial) {
-    ; // wait for serial port to connect. Needed for native USB port only
-  }
+  while (!Serial);
 
   // check for the WiFi module:
   if (WiFi.status() == WL_NO_MODULE) {
@@ -54,11 +78,29 @@ void setup() {
 
   // MKR ENV SHIELD SETUP
 
+  if (!ENV.begin()) {
+    Serial.println("Failed to initialize MKR ENV Shield!");
+    while (1);
+  }
+
   // OZONE MQ131 SETUP
 
   // SPARKFUN QWIIC CO2 SETUP
 
   // SEN55-SDN-T SETUP
+  /*Wire.setClock(I2C_FREQ_HZ);
+
+  Wire.beginTransmission(SEN55_ADDRESS);
+  Wire.write(0x00);
+  Wire.write(0x21);
+  Wire.endTransmission();
+
+  err = cotwo.begin();
+  if(XENSIV_PASCO2_OK != err)
+  {
+    Serial.print("initialization error: ");
+    Serial.println(err);
+  }*/
 
   // MICROPHONE SETUP
 }
@@ -83,15 +125,16 @@ void read_request() {
 void loop() {
   read_request();
 
-  String jsonData = constructJSON();
+  delay(20000);
 
   if (millis() - lastConnectionTime_ms > postingInterval_ms) {
-    httpRequest(jsonData);
+    char buffer[2048];
+    constructJSON(buffer);
+    httpRequest(buffer);
   }
-  delay(20000);
 }
 
-void httpRequest(String jsondata) {
+void httpRequest(buffer) {
   // close any connection before send a new request.
   // This will free the socket on the NINA module
   client.stop();
@@ -100,15 +143,15 @@ void httpRequest(String jsondata) {
   if (client.connect(server, 8080)) {  // client and server might both be able to use 80; test to see if that's possible
     Serial.println("connecting...");
     // send the HTTP GET request:
-    client.println("POST /data HTTP/1.1");
+    client.println("POST /measurements HTTP/1.1");
     client.println("Host: example.org");
     client.println("User-Agent: ArduinoWiFi/1.1"); // Change per sensor so that the server knows where all the data comes from
     clinet.println("Content-Type: application.json")
     client.print("Content-Length: ");
-    client.print(jsonData.length());
+    client.print(measureJson(doc));
     client.print("\n\n");
 
-    client.print(jsonData);
+    client.print(buffer);
     
     client.println("Connection: close");
     client.println();
@@ -137,8 +180,38 @@ void printWifiStatus() {
   Serial.println(" dBm");
 }
 
-String constructJSON() {
+void constructJSON(buffer) {
+  // TIME
   timeClient.update();
+
+  // SEN55
+  Wire.requestFrom(SEN55_ADDRESS, 24);
+  counter = 0;
+  
+  while (Wire.available()) {
+    // PM1.0 to PM10 are unscaled unsigned integer values in ug / um3
+    // VOC level is a signed int and scaled by a factor of 10 and needs to be divided by 10
+    // humidity is a signed int and scaled by 100 and need to be divided by 100
+    // temperature is a signed int and scaled by 200 and need to be divided by 200
+    data[counter++] = Wire.read();
+  }
+
+  // real construction
   // BRAND_SENSOR_MEASUREDQUANITITY: DATA
-  String result = "{\"time\":%d}", timeClient.getEpochTime(); // RETURNS UNIX TIME; ADDS EPOCH
+  doc["time"] = timeClient.getEpochTime();
+  doc["mkr_env_temperature"] = ENV.readTemperature();
+  doc["mkr_env_humidity"] = ENV.readHumidity();
+  doc["mkr_env_pressure"] = ENV.readPressure();
+  doc["mkr_env_illuminance"] = ENV.readIlluminance();
+  doc["mkr_env_uvindex"] = ENV.readUVIndex();
+  doc["sensirion_sen55_pm1p0"] = float((uint16_t)data[0] << 8 | data[1]) / 10;
+  doc["sensirion_sen55_pm2p5"] = float((uint16_t)data[3] << 8 | data[4]) / 10;
+  doc["sensirion_sen55_pm4p0"] = float((uint16_t)data[6] << 8 | data[7]) / 10;
+  doc["sensirion_sen55_pm10p0"] = float((uint16_t)data[9] << 8 | data[10]) / 10;
+  doc["sensirion_sen55_humidity"] = float((uint16_t)data[12] << 8 | data[13]) / 10;
+  doc["sensirion_sen55_temperature"] = float((uint16_t)data[15] << 8 | data[16]) / 10;
+  doc["sensirion_sen55_voc"] = float((uint16_t)data[18] << 8 | data[19]) / 100;
+  doc["sensirion_sen55_nox"] = float((uint16_t)data[21] << 8 | data[22]) / 200;
+
+  serializeJson(doc, buffer);
 }
