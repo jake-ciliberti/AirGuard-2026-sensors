@@ -33,8 +33,9 @@ Error_t err;
 
 const int16_t SEN55_ADDRESS = 0x69;
 
-char server[] = "example.org";
-//IPAddress server(64,131,82,241);
+//char server[] = "example.org";
+IPAddress server(10,214,12,93);
+int port = 10080;
 
 unsigned long lastConnectionTime_ms = 0;
 const unsigned long postingInterval_ms = 10L * 1000L;
@@ -81,10 +82,10 @@ void setup() {
 
   // MKR ENV SHIELD SETUP
 
-  if (!ENV.begin()) {
-    Serial.println("Failed to initialize MKR ENV Shield!");
-    while (1);
-  }
+  // if (!ENV.begin()) {
+  //   Serial.println("Failed to initialize MKR ENV Shield!");
+  //   while (1);
+  // }
 
   // OZONE MQ131 SETUP
 
@@ -143,11 +144,11 @@ void httpRequest(char *buffer) {
   wifi.stop();
 
   // if there's a successful connection:
-  if (wifi.connect(server, 8080)) {  // client and server might both be able to use 80; test to see if that's possible
+  if (wifi.connect(server, port)) {  // client and server might both be able to use 80; test to see if that's possible
     Serial.println("connecting...");
     // send the HTTP GET request:
     wifi.println("POST /measurements HTTP/1.1");
-    wifi.println("Host: example.org");
+    wifi.println("Host: 10.214.12.93");
     wifi.println("User-Agent: ArduinoWiFi/1.1"); // Change per sensor so that the server knows where all the data comes from
     wifi.println("Content-Type: application.json");
     wifi.print("Content-Length: ");
@@ -202,11 +203,13 @@ void constructJSON(char *buffer) {
   // real construction
   // BRAND_SENSOR_MEASUREDQUANITITY: DATA
   doc["time"] = timeClient.getEpochTime();
-  doc["mkr_env_temperature"] = ENV.readTemperature();
-  doc["mkr_env_humidity"] = ENV.readHumidity();
-  doc["mkr_env_pressure"] = ENV.readPressure();
-  doc["mkr_env_illuminance"] = ENV.readIlluminance();
-  doc["mkr_env_uvindex"] = ENV.readUVIndex();
+  // MKR ENV SHIELD
+  // doc["mkr_env_temperature"] = ENV.readTemperature();
+  // doc["mkr_env_humidity"] = ENV.readHumidity();
+  // doc["mkr_env_pressure"] = ENV.readPressure();
+  // doc["mkr_env_illuminance"] = ENV.readIlluminance();
+  // doc["mkr_env_uvindex"] = ENV.readUVIndex();
+  // SEN55
   // doc["sensirion_sen55_pm1p0"] = float((uint16_t)data[0] << 8 | data[1]) / 10;
   // doc["sensirion_sen55_pm2p5"] = float((uint16_t)data[3] << 8 | data[4]) / 10;
   // doc["sensirion_sen55_pm4p0"] = float((uint16_t)data[6] << 8 | data[7]) / 10;
@@ -215,6 +218,7 @@ void constructJSON(char *buffer) {
   // doc["sensirion_sen55_temperature"] = float((uint16_t)data[15] << 8 | data[16]) / 10;
   // doc["sensirion_sen55_voc"] = float((uint16_t)data[18] << 8 | data[19]) / 100;
   // doc["sensirion_sen55_nox"] = float((uint16_t)data[21] << 8 | data[22]) / 200;
+  // 
 
-  serializeJson(doc, buffer);
+  serializeJson(doc, buffer, 2048);
 }
