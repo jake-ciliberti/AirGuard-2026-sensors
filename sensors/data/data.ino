@@ -1,6 +1,7 @@
 #include <Arduino.h>
 #include <Arduino_MKRENV.h>
 #include <ArduinoJson.h>
+#include <MQ131.h>
 #include <NTPClient.h>
 #include <pas-co2-ino.hpp>
 #include <SensirionI2cSps30.h>
@@ -88,6 +89,17 @@ void setup() {
   // }
 
   // OZONE MQ131 SETUP
+  MQ131.begin(2,A0, LOW_CONCENTRATION, 1000000);
+  // NOTE: uncomment the following lines for active calibration
+  // Serial.println("Calibration in progress...");
+  // MQ131.calibrate();
+  Serial.println("Calibration parameters:");
+  Serial.print("R0 = ");
+  Serial.print(MQ131.getR0());
+  Serial.println(" Ohms");
+  Serial.print("Time to heat = ");
+  Serial.print(MQ131.getTimeToRead());
+  Serial.println(" s");
 
   // SPARKFUN QWIIC CO2 SETUP
 
@@ -136,6 +148,8 @@ void loop() {
     constructJSON(buffer);
     httpRequest(buffer);
   }
+
+  delay(40000);
 }
 
 void httpRequest(char *buffer) {
@@ -188,6 +202,9 @@ void constructJSON(char *buffer) {
   // TIME
   timeClient.update();
 
+  // MQ131
+  MQ131.sample();
+
   // SEN55
   Wire.requestFrom(SEN55_ADDRESS, 24);
   int counter = 0;
@@ -209,6 +226,11 @@ void constructJSON(char *buffer) {
   // doc["mkr_env_pressure"] = ENV.readPressure();
   // doc["mkr_env_illuminance"] = ENV.readIlluminance();
   // doc["mkr_env_uvindex"] = ENV.readUVIndex();
+  // MQ131
+  doc["soldered_mq131_ozone_ppm"] = MQ131.getO3(PPM);
+  doc["soldered_mq131_ozone_ppb"] = MQ131.getO3(PPB);
+  doc["soldered_mq131_ozone_mg_m3"] = MQ131.getO3(MG_M3);
+  doc["soldered_mq131_ozone_ug_m3"] = MQ131.getO3(UG_M3);
   // SEN55
   // doc["sensirion_sen55_pm1p0"] = float((uint16_t)data[0] << 8 | data[1]) / 10;
   // doc["sensirion_sen55_pm2p5"] = float((uint16_t)data[3] << 8 | data[4]) / 10;
