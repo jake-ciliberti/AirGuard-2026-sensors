@@ -1,9 +1,11 @@
 #include <Arduino.h>
 #include <Arduino_MKRENV.h>
-#include <ArudinoJson.h>
+#include <ArduinoJson.h>
+#include <NTPClient.h>
 #include <pas-co2-ino.hpp>
 #include <SensirionI2cSps30.h>
 #include <WiFiS3.h>
+#include <WiFiUdp.h>
 #include <Wire.h>
 
 /* 
@@ -21,7 +23,8 @@ const char pass[] = "FlexibleDoor84";
 
 int status = WL_IDLE_STATUS;
 
-WiFiClient client;
+WiFiClient wifi;
+WiFiUDP ntpUDP;
 
 PASCO2Ino cotwo;
 
@@ -108,9 +111,9 @@ void setup() {
 void read_request() {
   uint32_t received_data_num = 0;
 
-  while (client.available()) {
+  while (wifi.available()) {
     /* actual data reception */
-    char c = client.read();
+    char c = wifi.read();
     /* print data to serial port */
     Serial.print(c);
     /* wrap data to 80 columns*/
@@ -134,27 +137,27 @@ void loop() {
   }
 }
 
-void httpRequest(buffer) {
+void httpRequest(char *buffer) {
   // close any connection before send a new request.
   // This will free the socket on the NINA module
-  client.stop();
+  wifi.stop();
 
   // if there's a successful connection:
-  if (client.connect(server, 8080)) {  // client and server might both be able to use 80; test to see if that's possible
+  if (wifi.connect(server, 8080)) {  // client and server might both be able to use 80; test to see if that's possible
     Serial.println("connecting...");
     // send the HTTP GET request:
-    client.println("POST /measurements HTTP/1.1");
-    client.println("Host: example.org");
-    client.println("User-Agent: ArduinoWiFi/1.1"); // Change per sensor so that the server knows where all the data comes from
-    clinet.println("Content-Type: application.json")
-    client.print("Content-Length: ");
-    client.print(measureJson(doc));
-    client.print("\n\n");
+    wifi.println("POST /measurements HTTP/1.1");
+    wifi.println("Host: example.org");
+    wifi.println("User-Agent: ArduinoWiFi/1.1"); // Change per sensor so that the server knows where all the data comes from
+    wifi.println("Content-Type: application.json");
+    wifi.print("Content-Length: ");
+    wifi.print(measureJson(doc));
+    wifi.print("\n\n");
 
-    client.print(buffer);
+    wifi.print(buffer);
     
-    client.println("Connection: close");
-    client.println();
+    wifi.println("Connection: close");
+    wifi.println();
     // note the time that the connection was made:
     lastConnectionTime_ms = millis();
   } else {
@@ -180,21 +183,21 @@ void printWifiStatus() {
   Serial.println(" dBm");
 }
 
-void constructJSON(buffer) {
+void constructJSON(char *buffer) {
   // TIME
   timeClient.update();
 
   // SEN55
   Wire.requestFrom(SEN55_ADDRESS, 24);
-  counter = 0;
+  int counter = 0;
   
-  while (Wire.available()) {
-    // PM1.0 to PM10 are unscaled unsigned integer values in ug / um3
-    // VOC level is a signed int and scaled by a factor of 10 and needs to be divided by 10
-    // humidity is a signed int and scaled by 100 and need to be divided by 100
-    // temperature is a signed int and scaled by 200 and need to be divided by 200
-    data[counter++] = Wire.read();
-  }
+  // while (Wire.available()) {
+  //   // PM1.0 to PM10 are unscaled unsigned integer values in ug / um3
+  //   // VOC level is a signed int and scaled by a factor of 10 and needs to be divided by 10
+  //   // humidity is a signed int and scaled by 100 and need to be divided by 100
+  //   // temperature is a signed int and scaled by 200 and need to be divided by 200
+  //   data[counter++] = Wire.read();
+  // }
 
   // real construction
   // BRAND_SENSOR_MEASUREDQUANITITY: DATA
@@ -204,14 +207,14 @@ void constructJSON(buffer) {
   doc["mkr_env_pressure"] = ENV.readPressure();
   doc["mkr_env_illuminance"] = ENV.readIlluminance();
   doc["mkr_env_uvindex"] = ENV.readUVIndex();
-  doc["sensirion_sen55_pm1p0"] = float((uint16_t)data[0] << 8 | data[1]) / 10;
-  doc["sensirion_sen55_pm2p5"] = float((uint16_t)data[3] << 8 | data[4]) / 10;
-  doc["sensirion_sen55_pm4p0"] = float((uint16_t)data[6] << 8 | data[7]) / 10;
-  doc["sensirion_sen55_pm10p0"] = float((uint16_t)data[9] << 8 | data[10]) / 10;
-  doc["sensirion_sen55_humidity"] = float((uint16_t)data[12] << 8 | data[13]) / 10;
-  doc["sensirion_sen55_temperature"] = float((uint16_t)data[15] << 8 | data[16]) / 10;
-  doc["sensirion_sen55_voc"] = float((uint16_t)data[18] << 8 | data[19]) / 100;
-  doc["sensirion_sen55_nox"] = float((uint16_t)data[21] << 8 | data[22]) / 200;
+  // doc["sensirion_sen55_pm1p0"] = float((uint16_t)data[0] << 8 | data[1]) / 10;
+  // doc["sensirion_sen55_pm2p5"] = float((uint16_t)data[3] << 8 | data[4]) / 10;
+  // doc["sensirion_sen55_pm4p0"] = float((uint16_t)data[6] << 8 | data[7]) / 10;
+  // doc["sensirion_sen55_pm10p0"] = float((uint16_t)data[9] << 8 | data[10]) / 10;
+  // doc["sensirion_sen55_humidity"] = float((uint16_t)data[12] << 8 | data[13]) / 10;
+  // doc["sensirion_sen55_temperature"] = float((uint16_t)data[15] << 8 | data[16]) / 10;
+  // doc["sensirion_sen55_voc"] = float((uint16_t)data[18] << 8 | data[19]) / 100;
+  // doc["sensirion_sen55_nox"] = float((uint16_t)data[21] << 8 | data[22]) / 200;
 
   serializeJson(doc, buffer);
 }
