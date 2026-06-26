@@ -219,7 +219,7 @@ void constructJSON(char *buffer) {
 
   // real construction
   // BRAND_SENSOR_MEASUREDQUANITITY: DATA
-  doc["time"] = timeClient.getEpochTime();
+  doc["time"] = timeClient.getEpochTime(); // gets epoch time in seconds with no offset
   // MKR ENV SHIELD
   // doc["mkr_env_temperature"] = ENV.readTemperature();
   // doc["mkr_env_humidity"] = ENV.readHumidity();
