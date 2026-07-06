@@ -27,12 +27,12 @@ int status = WL_IDLE_STATUS;
 WiFiClient wifi;
 WiFiUDP ntpUDP;
 
+const int16_t SEN55_ADDRESS = 0x69;
+
 PASCO2Ino cotwo;
 
 int16_t co2ppm;
 Error_t err;
-
-const int16_t SEN55_ADDRESS = 0x69;
 
 //char server[] = "example.org";
 IPAddress server(10,214,12,93);
@@ -103,15 +103,7 @@ void setup() {
 
   // SPARKFUN QWIIC CO2 SETUP
 
-  // SEN55-SDN-T SETUP
-  /*Wire.setClock(I2C_FREQ_HZ);
-
-  Wire.beginTransmission(SEN55_ADDRESS);
-  Wire.write(0x00);
-  Wire.write(0x21);
-  Wire.endTransmission();
-
-  err = cotwo.begin();
+  /* err = cotwo.begin();
   if(XENSIV_PASCO2_OK != err)
   {
     Serial.print("initialization error: ");
@@ -121,26 +113,7 @@ void setup() {
   // MICROPHONE SETUP
 }
 
-void read_request() {
-  uint32_t received_data_num = 0;
-
-  while (wifi.available()) {
-    /* actual data reception */
-    char c = wifi.read();
-    /* print data to serial port */
-    Serial.print(c);
-    /* wrap data to 80 columns*/
-    received_data_num++;
-    if(received_data_num % 80 == 0) { 
-      
-    }
-    
-  }  
-}
-
 void loop() {
-  read_request();
-
   delay(20000);
 
   if (millis() - lastConnectionTime_ms > postingInterval_ms) {
@@ -155,6 +128,8 @@ void loop() {
 void httpRequest(char *buffer) {
   // close any connection before send a new request.
   // This will free the socket on the NINA module
+  Serial.println(buffer);
+  Serial.println("Starting HTTP connection");
   wifi.stop();
 
   // if there's a successful connection:
@@ -206,16 +181,36 @@ void constructJSON(char *buffer) {
   MQ131.sample();
 
   // SEN55
+  uint16_t pm1p0, pm2p5, pm4p0, pm10p0;
+  int16_t voc, nox, humidity, temperature;
+  uint8_t data[24], counter;
+
+  Wire.beginTransmission(SEN55_ADDRESS);
+  Wire.write(0x03);
+  Wire.write(0xC4);
+  Wire.endTransmission();
+
+  delay(20);
+
   Wire.requestFrom(SEN55_ADDRESS, 24);
-  int counter = 0;
+  counter = 0;
   
-  // while (Wire.available()) {
-  //   // PM1.0 to PM10 are unscaled unsigned integer values in ug / um3
-  //   // VOC level is a signed int and scaled by a factor of 10 and needs to be divided by 10
-  //   // humidity is a signed int and scaled by 100 and need to be divided by 100
-  //   // temperature is a signed int and scaled by 200 and need to be divided by 200
-  //   data[counter++] = Wire.read();
-  // }
+  while (Wire.available()) {
+    // PM1.0 to PM10 are unscaled unsigned integer values in ug / um3
+    // VOC level is a signed int and scaled by a factor of 10 and needs to be divided by 10
+    // humidity is a signed int and scaled by 100 and need to be divided by 100
+    // temperature is a signed int and scaled by 200 and need to be divided by 200
+    data[counter++] = Wire.read();
+  }
+
+  pm1p0 = (uint16_t)data[0] << 8 | data[1];
+  pm2p5 = (uint16_t)data[3] << 8 | data[4];
+  pm4p0 = (uint16_t)data[6] << 8 | data[7];
+  pm10p0 = (uint16_t)data[9] << 8 | data[10];
+  humidity = (uint16_t)data[12] << 8 | data[13];
+  temperature = (uint16_t)data[15] << 8 | data[16];
+  voc = (uint16_t)data[18] << 8 | data[19];
+  nox = (uint16_t)data[21] << 8 | data[22];
 
   // real construction
   // BRAND_SENSOR_MEASUREDQUANITITY: DATA
@@ -232,15 +227,14 @@ void constructJSON(char *buffer) {
   doc["soldered_mq131_ozone_mg_m3"] = MQ131.getO3(MG_M3);
   doc["soldered_mq131_ozone_ug_m3"] = MQ131.getO3(UG_M3);
   // SEN55
-  // doc["sensirion_sen55_pm1p0"] = float((uint16_t)data[0] << 8 | data[1]) / 10;
-  // doc["sensirion_sen55_pm2p5"] = float((uint16_t)data[3] << 8 | data[4]) / 10;
-  // doc["sensirion_sen55_pm4p0"] = float((uint16_t)data[6] << 8 | data[7]) / 10;
-  // doc["sensirion_sen55_pm10p0"] = float((uint16_t)data[9] << 8 | data[10]) / 10;
-  // doc["sensirion_sen55_humidity"] = float((uint16_t)data[12] << 8 | data[13]) / 10;
-  // doc["sensirion_sen55_temperature"] = float((uint16_t)data[15] << 8 | data[16]) / 10;
-  // doc["sensirion_sen55_voc"] = float((uint16_t)data[18] << 8 | data[19]) / 100;
-  // doc["sensirion_sen55_nox"] = float((uint16_t)data[21] << 8 | data[22]) / 200;
-  // 
+  doc["sensirion_sen55_pm1p0"] = float(pm1p0) / 10;
+  doc["sensirion_sen55_pm2p5"] = float(pm2p5) / 10;
+  doc["sensirion_sen55_pm4p0"] = float(pm4p0) / 10;
+  doc["sensirion_sen55_pm10p0"] = float(pm10p0) / 10;
+  doc["sensirion_sen55_voc"] = float(voc) / 10;
+  doc["sensirion_sen55_nox"] = float(nox) / 10;
+  doc["sensirion_sen55_humidity"] = float(humidity) / 100;
+  doc["sensirion_sen55_temperature"] = float(temperature) / 200;
 
   serializeJson(doc, buffer, 2048);
 }
