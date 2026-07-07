@@ -89,7 +89,7 @@ void setup() {
   // }
 
   // OZONE MQ131 SETUP
-  MQ131.begin(2,A0, LOW_CONCENTRATION, 1000000);
+  MQ131.begin(2, A0, LOW_CONCENTRATION, 1000000);
   // NOTE: uncomment the following lines for active calibration
   // Serial.println("Calibration in progress...");
   // MQ131.calibrate();
@@ -102,6 +102,13 @@ void setup() {
   // Serial.println(" s");
 
   // SENSIRION SEN55 Setup
+
+  // for more information: https://github.com/Sensirion/arduino-snippets/blob/main/SEN5x_I2C_switch_measurement_mode/SEN5x_I2C_switch_measurement_mode.ino
+
+  Wire.beginTransmission(SEN55_ADDRESS);
+  Wire.write(0x00);
+  Wire.write(0x21);
+  Wire.endTransmission();
 
   // SPARKFUN QWIIC CO2 SETUP
 
@@ -116,10 +123,13 @@ void setup() {
 }
 
 void loop() {
+  char buffer[2048];
+
+  constructJSON(buffer);
+  
   delay(20000);
 
   if (millis() - lastConnectionTime_ms > postingInterval_ms) {
-    char buffer[2048];
     constructJSON(buffer);
     size_t size = measureJson(doc);
     httpRequest(buffer, size);
