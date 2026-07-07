@@ -34,9 +34,9 @@ PASCO2Ino cotwo;
 int16_t co2ppm;
 Error_t err;
 
-//char server[] = "example.org";
-IPAddress server(10,214,12,93);
-int port = 10080;
+char server[] = "test.jakeciliberti.com";
+//IPAddress server(10,214,12,93);
+int port = 80;
 
 unsigned long lastConnectionTime_ms = 0;
 const unsigned long postingInterval_ms = 10L * 1000L;
@@ -93,13 +93,15 @@ void setup() {
   // NOTE: uncomment the following lines for active calibration
   // Serial.println("Calibration in progress...");
   // MQ131.calibrate();
-  Serial.println("Calibration parameters:");
-  Serial.print("R0 = ");
-  Serial.print(MQ131.getR0());
-  Serial.println(" Ohms");
-  Serial.print("Time to heat = ");
-  Serial.print(MQ131.getTimeToRead());
-  Serial.println(" s");
+  // Serial.println("Calibration parameters:");
+  // Serial.print("R0 = ");
+  // Serial.print(MQ131.getR0());
+  // Serial.println(" Ohms");
+  // Serial.print("Time to heat = ");
+  // Serial.print(MQ131.getTimeToRead());
+  // Serial.println(" s");
+
+  // SENSIRION SEN55 Setup
 
   // SPARKFUN QWIIC CO2 SETUP
 
@@ -119,16 +121,18 @@ void loop() {
   if (millis() - lastConnectionTime_ms > postingInterval_ms) {
     char buffer[2048];
     constructJSON(buffer);
-    httpRequest(buffer);
+    size_t size = measureJson(doc);
+    httpRequest(buffer, size);
   }
 
   delay(40000);
 }
 
-void httpRequest(char *buffer) {
+void httpRequest(char *buffer, size_t size) {
   // close any connection before send a new request.
   // This will free the socket on the NINA module
   Serial.println(buffer);
+  Serial.println(size);
   Serial.println("Starting HTTP connection");
   wifi.stop();
 
@@ -137,11 +141,12 @@ void httpRequest(char *buffer) {
     Serial.println("connecting...");
     // send the HTTP GET request:
     wifi.println("POST /measurements HTTP/1.1");
-    wifi.println("Host: 10.214.12.93");
+    wifi.print("Host: ");
+    wifi.println(server); // needs to be casted to String if using a numerical IP
     wifi.println("User-Agent: ArduinoWiFi/1.1"); // Change per sensor so that the server knows where all the data comes from
     wifi.println("Content-Type: application.json");
     wifi.print("Content-Length: ");
-    wifi.print(measureJson(doc));
+    wifi.print(size);
     wifi.print("\n\n");
 
     wifi.print(buffer);
@@ -221,6 +226,8 @@ void constructJSON(char *buffer) {
   // doc["mkr_env_pressure"] = ENV.readPressure();
   // doc["mkr_env_illuminance"] = ENV.readIlluminance();
   // doc["mkr_env_uvindex"] = ENV.readUVIndex();
+  // FLUXTEQ
+
   // MQ131
   doc["soldered_mq131_ozone_ppm"] = MQ131.getO3(PPM);
   doc["soldered_mq131_ozone_ppb"] = MQ131.getO3(PPB);
