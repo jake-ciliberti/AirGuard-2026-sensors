@@ -5,6 +5,7 @@
 #include <NTPClient.h>
 #include <pas-co2-ino.hpp>
 #include <SensirionI2cSps30.h>
+#include <SparkFun_STC3x_Arduino_Library.h>
 #include <WiFiS3.h>
 #include <WiFiUdp.h>
 #include <Wire.h>
@@ -38,8 +39,10 @@ char server[] = "test.jakeciliberti.com";
 //IPAddress server(10,214,12,93);
 int port = 80;
 
+char buffer[1024] = "Starting sensors!";
+
 unsigned long lastConnectionTime_ms = 0;
-const unsigned long postingInterval_ms = 60L * 1000L;
+const unsigned long postingInterval_ms = 20L * 1000L;
 int keyIndex = 0;
 
 NTPClient timeClient(ntpUDP);
@@ -47,7 +50,6 @@ JsonDocument doc;
 
 void setup() {
   Serial.begin(115200);
-  // might be the wrong wire. work on this if the wires don't work https://docs.arduino.cc/language-reference/en/functions/communication/wire/#default-i2c-pins
   Wire.begin();
 
   // WIFI SETUP
@@ -56,7 +58,6 @@ void setup() {
   // check for the WiFi module:
   if (WiFi.status() == WL_NO_MODULE) {
     Serial.println("Communication with WiFi module failed!");
-    // don't continue
     while (true);
   }
 
@@ -85,7 +86,7 @@ void setup() {
 
   if (!ENV.begin()) {
     Serial.println("Failed to initialize MKR ENV Shield!");
-    while (1);
+    while (true);
   }
 
   // OZONE MQ131 SETUP
@@ -123,26 +124,27 @@ void setup() {
 
   // SERVER
   // server.begin()
+
+
+  constructJSON();
+
   Serial.println("Done setting up");
+
+  // delay(20000);
 }
 
 void loop() {
-  char buffer[1024] = "Starting sensor!";
-
-  constructJSON(buffer);
-  
-  delay(20000);
-
   if (millis() - lastConnectionTime_ms > postingInterval_ms) {
-    constructJSON(buffer);
+    Serial.println("Getting sensor data");
+    constructJSON();
     size_t size = measureJson(doc);
-    httpRequest(buffer, size);
+    httpRequest(size);
   }
 
 
 }
 
-void httpRequest(char *buffer, size_t size) {
+void httpRequest(size_t size) {
   // close any connection before send a new request.
   // This will free the socket on the NINA module
   Serial.println(buffer);
@@ -176,31 +178,14 @@ void httpRequest(char *buffer, size_t size) {
   }
 }
 
-void printWifiStatus() {
-  // print the SSID of the network you're attached to:
-  Serial.print("SSID: ");
-  Serial.println(WiFi.SSID());
-
-  // print your board's IP address:
-  IPAddress ip = WiFi.localIP();
-  Serial.print("IP Address: ");
-  Serial.println(ip);
-
-  // print the received signal strength:
-  long rssi = WiFi.RSSI();
-  Serial.print("signal strength (RSSI):");
-  Serial.print(rssi);
-  Serial.println(" dBm");
-}
-
-void constructJSON(char *buffer) {
+void constructJSON() {
   // TIME
   timeClient.update();
 
   // MQ131
-  MQ131.sample();
+  // MQ131.sample();
 
-  // SEN55
+  // // SEN55
   uint16_t pm1p0, pm2p5, pm4p0, pm10p0;
   int16_t voc, nox, humidity, temperature;
   uint8_t data[24], counter;
@@ -236,7 +221,7 @@ void constructJSON(char *buffer) {
   // BRAND_SENSOR_MEASUREDQUANITITY: DATA
 
   doc["time"] = timeClient.getEpochTime(); // gets epoch time in seconds with no offset
-  
+
   // MKR ENV SHIELD
   doc["mkr_env_temperature"] = ENV.readTemperature(); // celsius
   doc["mkr_env_humidity"] = ENV.readHumidity();
@@ -247,10 +232,10 @@ void constructJSON(char *buffer) {
   // FLUXTEQ
 
   // MQ131
-  doc["soldered_mq131_ozone_ppm"] = MQ131.getO3(PPM);
-  doc["soldered_mq131_ozone_ppb"] = MQ131.getO3(PPB);
-  doc["soldered_mq131_ozone_mg_m3"] = MQ131.getO3(MG_M3);
-  doc["soldered_mq131_ozone_ug_m3"] = MQ131.getO3(UG_M3);
+  // doc["soldered_mq131_ozone_ppm"] = MQ131.getO3(PPM);
+  // doc["soldered_mq131_ozone_ppb"] = MQ131.getO3(PPB);
+  // doc["soldered_mq131_ozone_mg_m3"] = MQ131.getO3(MG_M3);
+  // doc["soldered_mq131_ozone_ug_m3"] = MQ131.getO3(UG_M3);
 
   // SEN55
   doc["sensirion_sen55_pm1p0"] = float(pm1p0) / 10; // ug / um3
