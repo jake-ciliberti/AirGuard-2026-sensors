@@ -219,14 +219,51 @@ void httpRequest(size_t size) {
   }
 }
 
+// TODO: check JSON library to make sure it can handle the memory constraints
 void constructJSON() {
   // TIME
   timeClient.update();
 
-  // MQ131
-  // MQ131.sample();
+  // real construction
+  // BRAND_SENSOR_MEASUREDQUANITITY: DATA
 
-  // // SEN55
+  doc["time"] = timeClient.getEpochTime(); // gets epoch time in seconds with no offset
+
+  mkrEnvShieldJson();
+
+  // FLUXTEQ
+
+  mq131Json();
+
+  sen55Json();
+
+  // QWIIC
+
+  serializeJson(doc, buffer, 1024);
+}
+
+void mkrEnvShieldJson() {
+  doc["mkr_env_temperature"] = ENV.readTemperature(); // celsius
+  doc["mkr_env_humidity"] = ENV.readHumidity();
+  doc["mkr_env_pressure"] = ENV.readPressure(); // kPa
+  doc["mkr_env_illuminance"] = ENV.readIlluminance(); // lx
+  doc["mkr_env_uvindex"] = ENV.readUVIndex();
+}
+
+void fluxTexJson() {
+  //
+}
+
+void mq131Json() {
+  MQ131.sample();
+
+  doc["soldered_mq131_ozone_ppm"] = MQ131.getO3(PPM);
+  doc["soldered_mq131_ozone_ppb"] = MQ131.getO3(PPB);
+  doc["soldered_mq131_ozone_mg_m3"] = MQ131.getO3(MG_M3);
+  doc["soldered_mq131_ozone_ug_m3"] = MQ131.getO3(UG_M3);
+}
+
+void sen55Json() {
   uint16_t pm1p0, pm2p5, pm4p0, pm10p0;
   int16_t voc, nox, humidity, temperature;
   uint8_t data[24], counter;
@@ -258,27 +295,7 @@ void constructJSON() {
   voc = (uint16_t)data[18] << 8 | data[19];
   nox = (uint16_t)data[21] << 8 | data[22];
 
-  // real construction
-  // BRAND_SENSOR_MEASUREDQUANITITY: DATA
 
-  doc["time"] = timeClient.getEpochTime(); // gets epoch time in seconds with no offset
-
-  // MKR ENV SHIELD
-  doc["mkr_env_temperature"] = ENV.readTemperature(); // celsius
-  doc["mkr_env_humidity"] = ENV.readHumidity();
-  doc["mkr_env_pressure"] = ENV.readPressure(); // kPa
-  doc["mkr_env_illuminance"] = ENV.readIlluminance(); // lx
-  doc["mkr_env_uvindex"] = ENV.readUVIndex();
-
-  // FLUXTEQ
-
-  // MQ131
-  // doc["soldered_mq131_ozone_ppm"] = MQ131.getO3(PPM);
-  // doc["soldered_mq131_ozone_ppb"] = MQ131.getO3(PPB);
-  // doc["soldered_mq131_ozone_mg_m3"] = MQ131.getO3(MG_M3);
-  // doc["soldered_mq131_ozone_ug_m3"] = MQ131.getO3(UG_M3);
-
-  // SEN55
   doc["sensirion_sen55_pm1p0"] = float(pm1p0) / 10; // ug / um3
   doc["sensirion_sen55_pm2p5"] = float(pm2p5) / 10; // ug / um3
   doc["sensirion_sen55_pm4p0"] = float(pm4p0) / 10; // ug / um3
@@ -287,8 +304,10 @@ void constructJSON() {
   doc["sensirion_sen55_nox"] = float(nox) / 10;
   doc["sensirion_sen55_humidity"] = float(humidity) / 100;
   doc["sensirion_sen55_temperature"] = float(temperature) / 200; // celsius
+}
 
-  serializeJson(doc, buffer, 1024);
+void qwiicJson() {
+  //
 }
 
 void printWifiStatus() {
