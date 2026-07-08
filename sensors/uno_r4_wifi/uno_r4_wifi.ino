@@ -35,18 +35,20 @@ PASCO2Ino cotwo;
 int16_t co2ppm;
 Error_t err;
 
-char server[] = "test.jakeciliberti.com";
-//IPAddress server(10,214,12,93);
+char remote[] = "test.jakeciliberti.com";
+//IPAddress remote(10,214,12,93);
 int port = 80;
 
 char buffer[1024] = "Starting sensors!";
 
 unsigned long lastConnectionTime_ms = 0;
-const unsigned long postingInterval_ms = 20L * 1000L;
+const unsigned long postingInterval_ms = 19L * 1000L;
 int keyIndex = 0;
 
 NTPClient timeClient(ntpUDP);
 JsonDocument doc;
+
+WiFiServer server(80);
 
 void setup() {
   Serial.begin(115200);
@@ -123,25 +125,64 @@ void setup() {
   // MICROPHONE SETUP
 
   // SERVER
-  // server.begin()
-
+  server.begin();
 
   constructJSON();
 
   Serial.println("Done setting up");
 
-  // delay(20000);
+  printWifiStatus();
 }
 
 void loop() {
+  localServer();
+
   if (millis() - lastConnectionTime_ms > postingInterval_ms) {
     Serial.println("Getting sensor data");
     constructJSON();
     size_t size = measureJson(doc);
     httpRequest(size);
   }
+}
 
+void localServer() {
+  WiFiClient client = server.available();
+  if (client) {
+    Serial.println("new client");
+    // an HTTP request ends with a blank line
+    boolean currentLineIsBlank = true;
+    while (client.connected()) {
+      if (client.available()) {
+        char c = client.read();
+        Serial.write(c);
+        // if you've gotten to the end of the line (received a newline
+        // character) and the line is blank, the HTTP request has ended,
+        // so you can send a reply
+        if (c == '\n' && currentLineIsBlank) {
+          // send a standard HTTP response header
+          client.println("HTTP/1.1 200 OK");
+          client.println("Content-Type: application/json");
+          client.println("Connection: close");  // the connection will be closed after completion of the response
+          client.println();
+          client.println(buffer);
+          break;
+        }
+        if (c == '\n') {
+          // you're starting a new line
+          currentLineIsBlank = true;
+        } else if (c != '\r') {
+          // you've gotten a character on the current line
+          currentLineIsBlank = false;
+        }
+      }
+    }
+    // give the web browser time to receive the data
+    delay(1);
 
+    // close the connection:
+    client.stop();
+    Serial.println("client disconnected");
+  }
 }
 
 void httpRequest(size_t size) {
@@ -153,12 +194,12 @@ void httpRequest(size_t size) {
   wifi.stop();
 
   // if there's a successful connection:
-  if (wifi.connect(server, port)) {  // client and server might both be able to use 80; test to see if that's possible
+  if (wifi.connect(remote, port)) {  // client and server might both be able to use 80; test to see if that's possible
     Serial.println("connecting...");
     // send the HTTP GET request:
     wifi.println("POST /measurements HTTP/1.1");
     wifi.print("Host: ");
-    wifi.println(server); // needs to be casted to String if using a numerical IP
+    wifi.println(remote); // needs to be casted to String if using a numerical IP
     wifi.println("User-Agent: ArduinoWiFi/1.1"); // Change per sensor so that the server knows where all the data comes from
     wifi.println("Content-Type: application.json");
     wifi.print("Content-Length: ");
@@ -248,4 +289,21 @@ void constructJSON() {
   doc["sensirion_sen55_temperature"] = float(temperature) / 200; // celsius
 
   serializeJson(doc, buffer, 1024);
+}
+
+void printWifiStatus() {
+  // print the SSID of the network you're attached to:
+  Serial.print("SSID: ");
+  Serial.println(WiFi.SSID());
+
+  // print your board's IP address:
+  IPAddress ip = WiFi.localIP();
+  Serial.print("IP Address: ");
+  Serial.println(ip);
+
+  // print the received signal strength:
+  long rssi = WiFi.RSSI();
+  Serial.print("signal strength (RSSI):");
+  Serial.print(rssi);
+  Serial.println(" dBm");
 }
