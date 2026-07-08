@@ -42,7 +42,7 @@ int port = 80;
 char buffer[1024] = "Starting sensors!";
 
 unsigned long lastConnectionTime_ms = 0;
-const unsigned long postingInterval_ms = 19L * 1000L;
+const unsigned long postingInterval_ms = 19L * 1000L; // Sensors read every minute; not sure why
 int keyIndex = 0;
 
 NTPClient timeClient(ntpUDP);
@@ -93,16 +93,6 @@ void setup() {
 
   // OZONE MQ131 SETUP
   MQ131.begin(2, A0, LOW_CONCENTRATION, 1000000);
-  // NOTE: uncomment the following lines for active calibration
-  // Serial.println("Calibration in progress...");
-  // MQ131.calibrate();
-  // Serial.println("Calibration parameters:");
-  // Serial.print("R0 = ");
-  // Serial.print(MQ131.getR0());
-  // Serial.println(" Ohms");
-  // Serial.print("Time to heat = ");
-  // Serial.print(MQ131.getTimeToRead());
-  // Serial.println(" s");
 
   // SENSIRION SEN55 Setup
 
@@ -135,7 +125,7 @@ void setup() {
 }
 
 void loop() {
-  localServer();
+  // localServer();
 
   if (millis() - lastConnectionTime_ms > postingInterval_ms) {
     Serial.println("Getting sensor data");

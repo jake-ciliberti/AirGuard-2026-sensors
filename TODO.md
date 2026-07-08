@@ -1,0 +1,6 @@
+- [ ] Sensors
+  - [ ] FluxTeq
+  - [ ] Qwiic
+- [ ] MicroSD reader
+- [ ] Remote server
+- [ ] (Stretch goal) get server running on UNO r4
