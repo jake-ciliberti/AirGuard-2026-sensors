@@ -39,7 +39,7 @@ char server[] = "test.jakeciliberti.com";
 int port = 80;
 
 unsigned long lastConnectionTime_ms = 0;
-const unsigned long postingInterval_ms = 10L * 1000L;
+const unsigned long postingInterval_ms = 60L * 1000L;
 int keyIndex = 0;
 
 NTPClient timeClient(ntpUDP);
@@ -83,10 +83,10 @@ void setup() {
 
   // MKR ENV SHIELD SETUP
 
-  // if (!ENV.begin()) {
-  //   Serial.println("Failed to initialize MKR ENV Shield!");
-  //   while (1);
-  // }
+  if (!ENV.begin()) {
+    Serial.println("Failed to initialize MKR ENV Shield!");
+    while (1);
+  }
 
   // OZONE MQ131 SETUP
   MQ131.begin(2, A0, LOW_CONCENTRATION, 1000000);
@@ -120,10 +120,14 @@ void setup() {
   }*/
 
   // MICROPHONE SETUP
+
+  // SERVER
+  // server.begin()
+  Serial.println("Done setting up");
 }
 
 void loop() {
-  char buffer[2048];
+  char buffer[1024] = "Starting sensor!";
 
   constructJSON(buffer);
   
@@ -135,7 +139,7 @@ void loop() {
     httpRequest(buffer, size);
   }
 
-  delay(40000);
+
 }
 
 void httpRequest(char *buffer, size_t size) {
@@ -165,6 +169,7 @@ void httpRequest(char *buffer, size_t size) {
     wifi.println();
     // note the time that the connection was made:
     lastConnectionTime_ms = millis();
+    Serial.println("connected");
   } else {
     // if you couldn't make a connection:
     Serial.println("connection failed");
@@ -229,13 +234,16 @@ void constructJSON(char *buffer) {
 
   // real construction
   // BRAND_SENSOR_MEASUREDQUANITITY: DATA
+
   doc["time"] = timeClient.getEpochTime(); // gets epoch time in seconds with no offset
+  
   // MKR ENV SHIELD
-  // doc["mkr_env_temperature"] = ENV.readTemperature();
-  // doc["mkr_env_humidity"] = ENV.readHumidity();
-  // doc["mkr_env_pressure"] = ENV.readPressure();
-  // doc["mkr_env_illuminance"] = ENV.readIlluminance();
-  // doc["mkr_env_uvindex"] = ENV.readUVIndex();
+  doc["mkr_env_temperature"] = ENV.readTemperature(); // celsius
+  doc["mkr_env_humidity"] = ENV.readHumidity();
+  doc["mkr_env_pressure"] = ENV.readPressure(); // kPa
+  doc["mkr_env_illuminance"] = ENV.readIlluminance(); // lx
+  doc["mkr_env_uvindex"] = ENV.readUVIndex();
+
   // FLUXTEQ
 
   // MQ131
@@ -243,15 +251,16 @@ void constructJSON(char *buffer) {
   doc["soldered_mq131_ozone_ppb"] = MQ131.getO3(PPB);
   doc["soldered_mq131_ozone_mg_m3"] = MQ131.getO3(MG_M3);
   doc["soldered_mq131_ozone_ug_m3"] = MQ131.getO3(UG_M3);
+
   // SEN55
-  doc["sensirion_sen55_pm1p0"] = float(pm1p0) / 10;
-  doc["sensirion_sen55_pm2p5"] = float(pm2p5) / 10;
-  doc["sensirion_sen55_pm4p0"] = float(pm4p0) / 10;
-  doc["sensirion_sen55_pm10p0"] = float(pm10p0) / 10;
+  doc["sensirion_sen55_pm1p0"] = float(pm1p0) / 10; // ug / um3
+  doc["sensirion_sen55_pm2p5"] = float(pm2p5) / 10; // ug / um3
+  doc["sensirion_sen55_pm4p0"] = float(pm4p0) / 10; // ug / um3
+  doc["sensirion_sen55_pm10p0"] = float(pm10p0) / 10; // ug / um3
   doc["sensirion_sen55_voc"] = float(voc) / 10;
   doc["sensirion_sen55_nox"] = float(nox) / 10;
   doc["sensirion_sen55_humidity"] = float(humidity) / 100;
-  doc["sensirion_sen55_temperature"] = float(temperature) / 200;
+  doc["sensirion_sen55_temperature"] = float(temperature) / 200; // celsius
 
-  serializeJson(doc, buffer, 2048);
+  serializeJson(doc, buffer, 1024);
 }
