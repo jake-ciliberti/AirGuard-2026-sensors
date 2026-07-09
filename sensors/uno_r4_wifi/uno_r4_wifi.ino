@@ -3,9 +3,8 @@
 #include <ArduinoJson.h>
 #include <MQ131.h>
 #include <NTPClient.h>
-#include <pas-co2-ino.hpp>
 #include <SensirionI2cSps30.h>
-#include <SparkFun_STC3x_Arduino_Library.h>
+#include <SparkFun_SCD4x_Arduino_Library.h>
 #include <WiFiS3.h>
 #include <WiFiUdp.h>
 #include <Wire.h>
@@ -30,10 +29,7 @@ WiFiUDP ntpUDP;
 
 const int16_t SEN55_ADDRESS = 0x69;
 
-PASCO2Ino cotwo;
-
-int16_t co2ppm;
-Error_t err;
+SCD4x qwiic;
 
 char remote[] = "test.jakeciliberti.com";
 //IPAddress remote(10,214,12,93);
@@ -56,6 +52,8 @@ void setup() {
 
   // WIFI SETUP
   while (!Serial);
+
+  Serial.println("Setting up!");
 
   // check for the WiFi module:
   if (WiFi.status() == WL_NO_MODULE) {
@@ -105,12 +103,11 @@ void setup() {
 
   // SPARKFUN QWIIC CO2 SETUP
 
-  /* err = cotwo.begin();
-  if(XENSIV_PASCO2_OK != err)
+  if (qwiic.begin() == false)
   {
-    Serial.print("initialization error: ");
-    Serial.println(err);
-  }*/
+    Serial.println(F("Qwiic sensor not detected. Please check wiring. Freezing..."));
+    while (true);
+  }
 
   // MICROPHONE SETUP
 
@@ -214,6 +211,8 @@ void constructJSON() {
   // TIME
   timeClient.update();
 
+  qwiic.readMeasurement();
+
   // real construction
   // BRAND_SENSOR_MEASUREDQUANITITY: DATA
 
@@ -227,7 +226,7 @@ void constructJSON() {
 
   sen55Json();
 
-  // QWIIC
+  qwiicJson();
 
   serializeJson(doc, buffer, 1024);
 }
@@ -297,7 +296,9 @@ void sen55Json() {
 }
 
 void qwiicJson() {
-  //
+  doc["sparkfun_qwiic_co2"] = qwiic.getCO2(); // ppm
+  doc["sparkfun_qwiic_temperature"] = qwiic.getTemperature();
+  doc["sparkfun_qwiic_humidity"] = qwiic.getHumidity();
 }
 
 void printWifiStatus() {
