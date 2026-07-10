@@ -50,6 +50,8 @@ void setup() {
   Serial.begin(115200);
   Wire.begin();
 
+  bool initialized = true;
+
   // WIFI SETUP
   while (!Serial);
 
@@ -58,7 +60,7 @@ void setup() {
   // check for the WiFi module:
   if (WiFi.status() == WL_NO_MODULE) {
     Serial.println("Communication with WiFi module failed!");
-    while (true);
+    initialized = false;
   }
 
   String fv = WiFi.firmwareVersion();
@@ -80,13 +82,11 @@ void setup() {
   // TIME SETUP
   timeClient.begin();
 
-  // FLUXTEQ SETUP
-
   // MKR ENV SHIELD SETUP
 
   if (!ENV.begin()) {
     Serial.println("Failed to initialize MKR ENV Shield!");
-    while (true);
+    initialized = false;
   }
 
   // OZONE MQ131 SETUP
@@ -106,10 +106,10 @@ void setup() {
   if (qwiic.begin() == false)
   {
     Serial.println(F("Qwiic sensor not detected. Please check wiring. Freezing..."));
-    while (true);
+    initialized = false;
   }
 
-  // MICROPHONE SETUP
+  while(!initialized);
 
   // SERVER
   server.begin();
@@ -220,8 +220,6 @@ void constructJSON() {
 
   mkrEnvShieldJson();
 
-  // FLUXTEQ
-
   mq131Json();
 
   sen55Json();
@@ -237,10 +235,6 @@ void mkrEnvShieldJson() {
   doc["mkr_env_pressure"] = ENV.readPressure(); // kPa
   doc["mkr_env_illuminance"] = ENV.readIlluminance(); // lx
   doc["mkr_env_uvindex"] = ENV.readUVIndex();
-}
-
-void fluxTexJson() {
-  //
 }
 
 void mq131Json() {
