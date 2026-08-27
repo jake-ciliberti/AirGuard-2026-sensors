@@ -3,8 +3,10 @@
 #include <ArduinoJson.h>
 #include <MQ131.h>
 #include <NTPClient.h>
+#include <SD.h>
 #include <SensirionI2cSps30.h>
 #include <SparkFun_SCD4x_Arduino_Library.h>
+#include <SPI.h>
 #include <WiFiS3.h>
 #include <WiFiUdp.h>
 #include <Wire.h>
@@ -16,11 +18,10 @@
  * change this value to 100000 in case of 
  * communication issues.
  */
-// TODO: check to make sure this does not mess up the other sensors that use WIRE
 #define I2C_FREQ_HZ 400000
 
-const char ssid[] = "JTR";
-const char pass[] = "FlexibleDoor84";
+char ssid[100] = "example_ssid";
+char pass[100] = "example_password";
 
 int status = WL_IDLE_STATUS;
 
@@ -46,6 +47,11 @@ JsonDocument doc;
 
 WiFiServer server(80);
 
+// Global flags allow partially borken devices to keep working
+bool SD_Reader = true;
+bool ENV_Shield = true;
+bool Qwiic = true;
+
 void setup() {
   Serial.begin(115200);
   Wire.begin();
@@ -56,6 +62,29 @@ void setup() {
   while (!Serial);
 
   Serial.println("Setting up!");
+
+  if (!SD.begin(4)) {
+    Serial.println("microsd initialization failed!");
+    SD_Reader = false;
+  }
+  else {
+    File networkInfoFile;
+
+    networkInfoFile = SD.open("networkInfo.txt");
+
+    if (networkInfoFile) {
+      String tempSSID = networkInfoFile.readStringUntil('\r\n');
+      String tempPassword = networkInfoFile.readStringUntil('\0');
+
+      // WARNING: if the info file is present and the network ifo inside is improperly formatted, this could break.
+      if (tempSSID && tempPassword) {
+        tempSSID.toCharArray(ssid, 100);
+        tempPassword.toCharArray(pass, 100);
+      }
+    }
+
+    networkInfoFile.close();
+  }
 
   // check for the WiFi module:
   if (WiFi.status() == WL_NO_MODULE) {
@@ -86,7 +115,7 @@ void setup() {
 
   if (!ENV.begin()) {
     Serial.println("Failed to initialize MKR ENV Shield!");
-    initialized = false;
+    ENV_Shield = false;
   }
 
   // OZONE MQ131 SETUP
@@ -103,10 +132,9 @@ void setup() {
 
   // SPARKFUN QWIIC CO2 SETUP
 
-  if (qwiic.begin() == false)
-  {
+  if (!qwiic.begin()) {
     Serial.println(F("Qwiic sensor not detected. Please check wiring. Freezing..."));
-    initialized = false;
+    Qwiic = false;
   }
 
   while(!initialized);
@@ -122,7 +150,8 @@ void setup() {
 }
 
 void loop() {
-  // localServer();
+  // FIXME: server gets interrupted by sensor reading very often. Usually only works for 20 seconds out of every minute
+  localServer();
 
   if (millis() - lastConnectionTime_ms > postingInterval_ms) {
     Serial.println("Getting sensor data");
@@ -206,25 +235,24 @@ void httpRequest(size_t size) {
   }
 }
 
-// TODO: check JSON library to make sure it can handle the memory constraints
 void constructJSON() {
   // TIME
   timeClient.update();
 
-  qwiic.readMeasurement();
+  if (Qwiic) qwiic.readMeasurement();
 
   // real construction
   // BRAND_SENSOR_MEASUREDQUANITITY: DATA
 
   doc["time"] = timeClient.getEpochTime(); // gets epoch time in seconds with no offset
 
-  mkrEnvShieldJson();
+  if (ENV_Shield) mkrEnvShieldJson();
 
   mq131Json();
 
   sen55Json();
 
-  qwiicJson();
+  if (Qwiic) qwiicJson();
 
   serializeJson(doc, buffer, 1024);
 }
