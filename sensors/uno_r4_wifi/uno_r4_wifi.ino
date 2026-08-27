@@ -74,7 +74,7 @@ void setup() {
 
     if (networkInfoFile) {
       String tempSSID = networkInfoFile.readStringUntil('\r\n');
-      String tempPassword = networkInfoFile.readStringUntil('\0');
+      String tempPassword = networkInfoFile.readStringUntil('\r\n');
 
       // WARNING: if the info file is present and the network ifo inside is improperly formatted, this could break.
       if (tempSSID && tempPassword) {
